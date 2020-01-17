@@ -1,0 +1,523 @@
+type: edu
+custom_name: stage4
+files:
+- name: test/TicTacToeTest.java
+  visible: false
+  text: |
+    import org.hyperskill.hstest.v6.stage.BaseStageTest;
+    import org.hyperskill.hstest.v6.testcase.CheckResult;
+    import org.hyperskill.hstest.v6.testcase.TestCase;
+    import tictactoe.Main;
+
+    import java.util.ArrayList;
+    import java.util.List;
+    import java.util.stream.Collectors;
+
+    enum FieldState {
+        X, O, FREE;
+
+        static FieldState get(char symbol) {
+            switch (symbol) {
+                case 'X': return X;
+                case 'O': return O;
+                case ' ':
+                case '_':
+                    return FREE;
+                default: return null;
+            }
+        }
+    }
+
+    class TicTacToeField {
+
+        final FieldState[][] field;
+
+        TicTacToeField(FieldState[][] field) {
+            this.field = field;
+        }
+
+        boolean equalTo(TicTacToeField other) {
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    if (field[i][j] != other.field[i][j]) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        boolean hasNextAs(TicTacToeField other) {
+            boolean improved = false;
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 3; j++) {
+                    if (field[i][j] != other.field[i][j]) {
+                        if (field[i][j] == FieldState.FREE && !improved) {
+                            improved = true;
+                        }
+                        else {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return improved;
+        }
+
+        boolean isCloseTo(TicTacToeField other) {
+            return equalTo(other)
+                || hasNextAs(other)
+                || other.hasNextAs(this);
+        }
+
+        static TicTacToeField parse(String fieldStr) {
+
+            try {
+                List<String> lines = fieldStr
+                    .lines()
+                    .map(String::strip)
+                    .filter(e ->
+                        e.startsWith("|")
+                            && e.endsWith("|"))
+                    .collect(Collectors.toList());
+
+                for (String line : lines) {
+                    for (char c : line.toCharArray()) {
+                        if (c != 'X'
+                            && c != 'O'
+                            && c != '|'
+                            && c != ' '
+                            && c != '_') {
+                            return null;
+                        }
+                    }
+                }
+
+                FieldState[][] field = new FieldState[3][3];
+
+                int y = 2;
+                for (String line : lines) {
+                    char[] cols = new char[] {
+                        line.charAt(2),
+                        line.charAt(4),
+                        line.charAt(6)
+                    };
+
+                    int x = 0;
+                    for (char c : cols) {
+                        FieldState state = FieldState.get(c);
+                        if (state == null) {
+                            return null;
+                        }
+                        field[y][x] = state;
+                        x++;
+                    }
+                    y--;
+                }
+
+                return new TicTacToeField(field);
+            } catch (Exception ex) {
+                return null;
+            }
+        }
+
+
+        static List<TicTacToeField> parseAll(String output) {
+            List<TicTacToeField> fields = new ArrayList<>();
+
+            List<String> lines = output
+                .lines()
+                .map(String::strip)
+                .filter(e -> e.length() > 0)
+                .collect(Collectors.toList());
+
+            String candidateField = "";
+            boolean insideField = false;
+            for (String line : lines) {
+                if (line.contains("----") && !insideField) {
+                    insideField = true;
+                    candidateField = "";
+                } else if (line.contains("----") && insideField) {
+                    TicTacToeField field = TicTacToeField.parse(candidateField);
+                    if (field != null) {
+                        fields.add(field);
+                    }
+                    insideField = false;
+                }
+
+                if (insideField && line.startsWith("|")) {
+                    candidateField += line + "\n";
+                }
+            }
+
+            return fields;
+        }
+
+    }
+
+
+    class Clue {
+        int x, y;
+        Clue(int x, int y) {
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    public class TicTacToeTest extends BaseStageTest<Clue> {
+        public TicTacToeTest() throws Exception {
+            super(Main.class);
+        }
+
+        static String[] inputs = new String[] {
+            "1 1", "1 2", "1 3",
+            "2 1", "2 2", "2 3",
+            "3 1", "3 2", "3 3"
+        };
+
+        String iterateCells(String initial) {
+            int index = -1;
+            for (int i = 0; i < inputs.length; i++) {
+                if (initial.equals(inputs[i])) {
+                    index = i;
+                    break;
+                }
+            }
+            if (index == -1) {
+                return "";
+            }
+            String fullInput = "";
+            for (int i = index; i < index + 9; i++) {
+                fullInput += inputs[i % inputs.length] + "\n";
+            }
+            return fullInput;
+        }
+
+        @Override
+        public List<TestCase<Clue>> generate() {
+
+            List<TestCase<Clue>> tests = new ArrayList<>();
+
+            int i = 0;
+            for (String input : inputs) {
+                String fullMoveInput = iterateCells(input);
+
+                String[] strNums = input.split(" ");
+                int x = Integer.parseInt(strNums[0]);
+                int y = Integer.parseInt(strNums[1]);
+
+                if (i % 2 == 1) {
+                    // mix with incorrect data
+                    fullMoveInput = "4 " + i + "\n" + fullMoveInput;
+                }
+
+                String fullGameInput = "";
+                for (int j = 0; j < 9; j++) {
+                    fullGameInput += fullMoveInput;
+                }
+
+                String initial;
+
+                switch (i % 4) {
+                    case 0: initial = "start user easy\n"; break;
+                    case 1: initial = "start easy user\n"; break;
+                    case 2: initial = "start user medium\n"; break;
+                    case 3: initial = "start medium user\n"; break;
+                    default: continue;
+                }
+
+                fullGameInput = initial + fullGameInput + "exit";
+
+                tests.add(new TestCase<Clue>()
+                    .setInput(fullGameInput));
+
+                i++;
+            }
+
+            tests.add(new TestCase<Clue>()
+                .setInput("start easy easy\nexit"));
+
+            tests.add(new TestCase<Clue>()
+                .setInput("start medium medium\nexit"));
+
+            tests.add(new TestCase<Clue>()
+                .setInput("start medium easy\nexit"));
+
+            tests.add(new TestCase<Clue>()
+                .setInput("start easy medium\nexit"));
+
+            tests.add(new TestCase<Clue>()
+                .setInput("start user user\n" +
+                    "1 1\n" +
+                    "2 2\n" +
+                    "1 2\n" +
+                    "2 1\n" +
+                    "1 3\n" +
+                    "exit"));
+
+            return tests;
+        }
+
+        @Override
+        public CheckResult check(String reply, Clue clue) {
+
+            List<TicTacToeField> fields = TicTacToeField.parseAll(reply);
+
+            if (fields.size() == 0) {
+                return new CheckResult(false, "No fields found");
+            }
+
+            for (int i = 1; i < fields.size(); i++) {
+                TicTacToeField curr = fields.get(i - 1);
+                TicTacToeField next = fields.get(i);
+
+                if (!(curr.equalTo(next) || curr.hasNextAs(next))) {
+                    return new CheckResult(false,
+                        "For two fields following each " +
+                            "other one is not a continuation " +
+                            "of the other (they differ more than in two places).");
+                }
+            }
+
+            return CheckResult.TRUE;
+        }
+    }
+  learner_created: false
+- name: src/tictactoe/Main.java
+  visible: true
+  text: |+
+    package tictactoe;
+
+    import java.util.*;
+
+    abstract class Player {
+        protected char simbol;
+        Player( char simb ) {
+            simbol = simb;
+
+        }
+        abstract  void makeMove(  );
+    }
+
+    class AIPlayer extends Player {
+        AIPlayer( char simb ) {
+            super(simb);
+            //System.out.println("Create AI");
+        }
+        void makeMove(  )  {
+            int row = 1 + (int)(Math.random()*2);
+            int startRow = row;
+            //System.out.println("startRow : " + startRow + "  Row : " + row);
+            boolean stop = false;
+            while(!stop) {
+                for( int i = 1 ; i <= 3 ; ++i ) {
+                    char ch = Main.GetState( row, i );
+                    if(ch != 'X' && ch != 'O') {
+                        //System.out.println("SetState  row : " + row + "  col : " + i);
+                        Main.SetState( row, i , simbol );
+                        stop = true;
+                        break;
+                    }
+                }
+                row++;
+                if( row > 3 )
+                    row = 1;
+                if( row == startRow)
+                    break;
+            }
+
+            System.out.println("Making move level \"easy\"");
+        }
+    }
+
+    class UserPlayer extends Player  {
+        UserPlayer( char simb ) {
+            super(simb);
+            //System.out.println("Create User");
+        }
+        void makeMove(  )  {
+            boolean cont = true;
+            int row = 0;
+            int col = 0;
+            while( cont ) {
+                System.out.print("Enter the coordinates: ");
+                String[] sz = Main.scan.nextLine().split(" ");
+                try {
+                    col = Integer.parseInt(sz[0]);
+                    if( sz.length > 1 )
+                        row = Integer.parseInt(sz[1]);
+                }
+                catch( NumberFormatException e ) {
+                    System.out.println("You should enter numbers!");
+                }
+
+                switch(Main.GetState( row, col)) {
+                    case '_' :
+                        Main.SetState(row, col, simbol);
+                        cont = false;
+                        break;
+                    case 'X' :
+                    case 'O' :
+                        System.out.println("This cell is occupied! Choose another one!");
+                        break;
+                    case 0 :
+                        System.out.println("Coordinates should be from 1 to 3!");
+                        break;
+                }
+
+            }
+        }
+    }
+
+    public class Main {
+        static void DrawState( ) {
+            System.out.println("---------");
+            System.out.format("| %c %c %c |\n", fieldCH[0] == '_' ? ' ' : fieldCH[0],
+                    fieldCH[1] == '_' ? ' ' : fieldCH[1],  fieldCH[2] == '_' ? ' ' : fieldCH[2]);
+            System.out.format("| %c %c %c |\n", fieldCH[3] == '_' ? ' ' : fieldCH[3],
+                    fieldCH[4] == '_' ? ' ' : fieldCH[4],  fieldCH[5] == '_' ? ' ' : fieldCH[5]);
+            System.out.format("| %c %c %c |\n", fieldCH[6] == '_' ? ' ' : fieldCH[6],
+                    fieldCH[7] == '_' ? ' ' : fieldCH[7],  fieldCH[8] == '_' ? ' ' : fieldCH[8]);
+            System.out.println("---------");
+        }
+
+        static int GetRes( int col, int row ) {
+            if( row < 0 || row >= 3 || col < 0 || col >= 3 )
+                return 0;
+            // System.out.println("GetState  pos : " + (3*(3-row) + col - 1));
+            return fieldCH[ col + row*3]== 'X' ? 1 :
+                    (fieldCH[col + row*3] == 'O' ? -1 : 0);
+        }
+
+        static boolean CheckState( ) {
+            int resV = 0, resH = 0, resDiag1 = 0, resDiag2 = 0;
+            boolean finished = true;
+            for( int i = 0 ; i < 3 ;  ++i ) {
+                resV = 0;
+                resH = 0;
+                for( int  j = 0 ; j < 3 ; ++j ) {
+                    resV += GetRes(i,j);
+                    resH += GetRes(j,i);
+                    if( GetRes(i,j) == 0 )
+                        finished = false;
+                }
+                if( resV == 3 || resH ==3 ) {
+                    System.out.println("X wins");
+                    return true;
+                }
+                if( resV == -3 || resH == -3 ) {
+                    System.out.println("O wins");
+                    return true;
+                }
+                resDiag1 += GetRes(i,i);
+                resDiag2 += GetRes(2-i,i);
+            }
+            if( resDiag1 == 3 || resDiag2 == 3 ) {
+                System.out.println("X wins");
+                return true;
+            }
+            if( resDiag1 == -3 || resDiag2 == -3 ) {
+                System.out.println("O wins");
+                return true;
+            }
+            if(finished) {
+                System.out.println("Draw");
+            } else {
+                //System.out.println("Game not finished");
+            }
+            return false;
+        }
+
+        static char GetState( int row, int col ) {
+            if( row < 1 || row > 3 || col <1 || col > 3 )
+                return 0;
+            // System.out.println("GetState  pos : " + (3*(3-row) + col - 1));
+            return fieldCH[ 3*(3-row) + col - 1];
+        }
+
+        static boolean SetState( int row, int col, char ch ) {
+            if( row < 1 || row > 3 || col < 1 ||col > 3 ) {
+                return false;
+            }
+            fieldCH[ 3*(3-row) + col - 1] = ch;
+            return true;
+
+        }
+
+
+        static void GetPosition( ) {
+
+        }
+
+        static Player makePlayer(  String type, char simb ) {
+            Player player = null;
+            switch (type) {
+                case "easy":
+                    player = new AIPlayer(simb);
+                    break;
+                case "user":
+                    player = new UserPlayer(simb);
+                    break;
+                default :
+                    System.out.println("Bad command");
+                    break;
+            }
+            return player;
+        }
+
+        public static void main(String[] args) {
+            while( true ) {
+                boolean commandIn = false;
+                while(!commandIn) {
+                    System.out.print("Input command: ");
+                    String[] command = scan.nextLine().split(" ");
+                    switch (command[0]) {
+                        case "exit":
+                            return;
+                        case "start":
+                            if( command.length == 3 ) {
+                                if( ("easy".equals(command[1]) || "user".equals(command[1])) &&
+                                        ("easy".equals(command[2]) || "user".equals(command[2])) ) {
+                                    player1 =  makePlayer( command[1], 'X' );
+                                    player2 = makePlayer( command[2], 'O' );
+                                    commandIn = true;
+                                } else {
+                                    System.out.println("Bad parameters!");
+                                }
+                            }
+                            break;
+                    }
+                }
+
+                Arrays.fill(fieldCH, '_');
+                boolean stop = false;
+
+                DrawState();
+                while (!stop) {
+                    player1.makeMove();
+                    //
+                    DrawState();
+                    stop = CheckState();
+                    //
+                    if(!stop) {
+                        player2.makeMove();
+                        //
+                        DrawState();
+                        stop = CheckState();
+                    }
+                }
+            }
+        }
+
+        static Scanner  scan = new Scanner(System.in);
+        static char[]   fieldCH = new char[9];
+        static char     nextChar = 'X';
+        static Player   player1 = null;
+        static Player   player2 = null;
+    }
+
+
+  learner_created: false
+feedback_link: https://hyperskill.org/projects/81/stages/450/implement
+status: Solved
+record: 3
